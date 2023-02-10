@@ -5,6 +5,8 @@ const View = require("@saltcorn/data/models/view");
 const Workflow = require("@saltcorn/data/models/workflow");
 const { stateFieldsToWhere } = require("@saltcorn/data/plugin-helper");
 
+const db = require("@saltcorn/data/db");
+
 const {
     text,
     div,
@@ -53,26 +55,39 @@ const configuration_workflow = () =>
                 // create new view
 
                 return new Form({
-                    fields: [{
-                            name: "expand_view",
-                            label: "Expand View",
-                            sublabel: "(Under construction) Leave blank to have no link to expand view",
-                            type: "String",
+                    fields: [
+                        {
+                            name: "title",
+                            label: "Mermaid diagramm",
+                            sublabel: "Choose diagramm title",
                             required: false,
+                            type: "String",
+                        },
+                        {
+                            name: "graph_mode",
+                            label: "Mermaid mode",
+                            sublabel: "Choose mermaid mode",
+                            required: true,
+                            type: "String",
                             attributes: {
-                                options: expand_view_opts.join(),
+                                options: "graph TD,graph LR,graph TR",
                             },
                         },
                         {
-                            name: "view_to_create",
-                            label: "Use view to create",
-                            sublabel: "(Under construction) Leave blank to have no link to create a new item",
+                            name: "link",
+                            label: "link field",
+                            sublabel: "Enter link name field",
                             required: false,
                             type: "String",
-                            attributes: {
-                                options: create_view_opts.join(),
-                            },
                         },
+/*                        {
+                            name: "link_name",
+                            label: "link field",
+                            sublabel: "Enter link name field",
+                            required: false,
+                            type: "String",
+                        },
+*/
                     ],
                 });
             },
@@ -90,8 +105,9 @@ const get_state_fields = async(table_id, viewname, { show_view }) => {
 const run = async(
     table_id,
     viewname, {
-        view_to_create,
-        expand_view,
+	title,
+        graph_mode,
+	link_name,
     },
     state,
     extraArgs
@@ -102,18 +118,53 @@ const run = async(
     const qstate = await stateFieldsToWhere({ fields, state });
     const rows = await table.getRows(qstate);
     //return {}; //{ name , start, end, progress: row[progress_field], custom_class };
+    let mermaid_str=`\n
+---
+${title}
+---
+${graph_mode}
+\n`;
+    const srcapp = 'srcapp';
+    const dstapp = 'destapp';
+    // defines Tasks List 
+/*
+    const tmp = rows.map((row) => {
+	mermaid_str += row[srcapp]+'---'+row[dstapp]+'\n';
+    });
+*/
+/*
+ graph LR
+      A[Client] --- B[Load Balancer]
+      B-->C[Server01]
+      B-->D(Server02)
+
+*/
+
+   const dbrows = await db.query(`select 
+s.name as "src", d.name as "dst", l.name as "link",
+l.srcapp as "sid", l.destapp as "did"
+from applinks l, apps s, apps d
+where l.srcapp = s.id 
+and l.destapp = d.id`);
+
+/*    const dbtmp = dbrows.map((row) => {
+	mermaid_str += row['src']+'---'+row['dst']+'\n';
+    });
+*/
+//   console.log(dbrows);
+   dbrows.rows.forEach(function(row) { 	
+	mermaid_str += 'a'+row['sid']+'['+row['src']+']---'+
+	'|'+row['link']+'|'+
+	'a'+row['did']+'['+row['dst']+']\n'; 
+   });
+
 
     return div(
         div(    {
       id: "mermaid_id",
       class: "mermaid",
     },
-     `
- graph LR
-      A[Client] --- B[Load Balancer]
-      B-->C[Server01]
-      B-->D(Server02)
-`
+	`${mermaid_str}`
         )
     );
 };
