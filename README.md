@@ -11,6 +11,10 @@ Flowchart view plugin for Saltcorn (based om [Mermaid](https://mermaid.js.org/sy
 
 ![image](https://user-images.githubusercontent.com/327030/218208320-2fd0458e-3e57-4d0e-8c3f-0543e93526ab.png)
 
+## rigth to left with different styles
+
+![image](https://user-images.githubusercontent.com/327030/218213433-e7695a3b-a9f5-4369-90dc-df2894850fce.png)
+
 
 # configration 
 ![image](https://user-images.githubusercontent.com/327030/218207161-5b6d4b23-c184-4777-9d64-d086d24cfc79.png)
