@@ -64,7 +64,7 @@ const configuration_workflow = () =>
                             type: "String",
                             required: true,
                             attributes: {
-                                options: "TB,BT,LR,TR",
+                                options: "TB,BT,LR,RL",
                             },
                         },
                         {   // https://mermaid.js.org/syntax/flowchart.html#links-between-nodes
@@ -228,11 +228,23 @@ and
 	l.${dst_node_field} = d.id`
 
 );
+   // [],(),[()],[[]],([]),(()),>],{}
+   const nodes_style_items = new Map([
+     ["[]"  ,["[" , "]" ]],
+     ["()"  ,["(" , ")" ]],
+     ["[()]",["[(", ")]"]],
+     ["[[]]",["[[", "]]"]],
+     ["([])",["([", "])"]],
+     ["(())",["((", "))"]],
+     [">]"  ,[">" , "]" ]],
+     ["{}"  ,["{" , "}" ]]
+   ]);
+   const nsi = nodes_style_items.get(nodes_style);
 
    dbrows.rows.forEach(function(row) { 	
-	mermaid_str += 'a'+row['sid']+'['+row['src']+']'+
+	mermaid_str += 'a'+row['sid']+nsi[0]+row['src']+nsi[1]+
 	links_style+'|'+row['link']+'|'+ 
-	'a'+row['did']+'['+row['dst']+']\n'; 
+	'a'+row['did']+nsi[0]+row['dst']+nsi[1]+'\n'; 
    });
 
    if (nodes_view){
@@ -268,10 +280,6 @@ const headers = [{
         script: "https://cdnjs.cloudflare.com/ajax/libs/mermaid/9.3.0/mermaid.min.js",
         integrity: "sha512-ku2nmBrzAXY5YwohzTqLYH1/lvyMrpTVxgQKrvTabd/b/uesqltLORdmpVapYv6QhZVCLUX6wkvFaKOAY4xpUA==",
     },
-//    {
-//        css: "https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.5.0/frappe-gantt.css",
-//        integrity: "sha512-qxE5FnEACGZSuLsbaDLCYuMRrxuLhQz1HtOJ2+3dHXSnFlckToa1rXHajkgLciNSdq+FCE4ey8R8fqjrD3HO0g==",
-//    },
 ];
 
 module.exports = {
