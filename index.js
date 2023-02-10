@@ -35,6 +35,7 @@ const configuration_workflow = () =>
             name: "views",
             form: async(context) => {
                 const table = await Table.findOne({ id: context.table_id });
+                console.log("table_id", context.table_id);
                 const fields = await table.getFields();
 
                 const expand_views = await View.find_table_views_where(
@@ -56,42 +57,118 @@ const configuration_workflow = () =>
 
                 return new Form({
                     fields: [
-                        {
-                            name: "title",
-                            label: "Mermaid diagramm",
-                            sublabel: "Choose diagramm title",
-                            required: false,
+                        {   // https://mermaid.js.org/syntax/flowchart.html
+                            name: "graph_orientation",
+                            label: "Flowchart orientation ",
+                            sublabel: "TB-top to bottom,BT-bottom to top,LR-left to right,RL-rigth to left. Default is 'TB'",
                             type: "String",
-                        },
-                        {
-                            name: "graph_mode",
-                            label: "Mermaid mode",
-                            sublabel: "Choose mermaid mode",
                             required: true,
-                            type: "String",
                             attributes: {
-                                options: "graph TD,graph LR,graph TR",
+                                options: "TB,BT,LR,TR",
+                            },
+                        },
+                        {   // https://mermaid.js.org/syntax/flowchart.html#links-between-nodes
+                            name: "links_style",
+                            label: "Links visualization style",
+                            sublabel: "Links connect node. Choose link style",
+                            type: "String",
+                            required: true,
+                            attributes: {
+                                options: "---,-->,-.->,-.-,==>,--o,--x,<-->,o--o,x--x",
                             },
                         },
                         {
-                            name: "link",
-                            label: "link field",
-                            sublabel: "Enter link name field",
-                            required: false,
+                            name: "links_name_field",
+                            label: "Link name field",
+                            sublabel: "Field type need to be 'String'",
                             type: "String",
+                            required: true,
+                            attributes: {
+                                options: fields
+                                    .filter((f) => f.type.name === "String")
+                                    .map((f) => f.name)
+                                    .join(),
+                            },
                         },
-/*                        {
-                            name: "link_name",
-                            label: "link field",
-                            sublabel: "Enter link name field",
-                            required: false,
+                        {
+                            name: "links_view",
+                            label: "Links table Expand View",
+                            //sublabel: "Click on node to show",
                             type: "String",
+                            required: false,
+                            attributes: {
+                                options: expand_view_opts.join(),
+                            },
                         },
+                        {   
+                            name: "nodes_table",
+                            label: "Nodes table name",
+                            sublabel: "Choose table - list of nodes",
+                            type: "String",
+                            required: true,
+                        },
+                        {   
+                            name: "nodes_style",
+                            label: "Nodes visualization style",
+                            sublabel: "Choose style",
+                            type: "String",
+                            required: true,
+                            attributes: {
+                                options: "[],(),[()],[[]],([]),(()),>],{}",
+                            },
+                        },
+                        {
+                            name: "nodes_name_field",
+                            label: "Nodes name field",
+                            sublabel: "Field in Nodes table with type 'String'",
+                            type: "String",
+                            required: true,
+/*                            attributes: {
+                                options: fields
+                                    .filter((f) => f.type.name === "String")
+                                    .map((f) => f.name)
+                                    .join(),
+                            },
 */
+                        },
+                        {   
+                            name: "src_node_field",
+                            label: "Source Node field",
+                            sublabel: "Field in Links table with type 'Key'",
+                            type: "String",
+                            required: true,
+                            attributes: {
+                                options: fields
+                                    .filter((f) => f.type.name === "Key")
+                                    .map((f) => f.name)
+                                    .join(),
+                            },
+                        },
+                        {   
+                            name: "dst_node_field",
+                            label: "Destination Node field",
+                            sublabel: "Field in Links table with type 'Key'",
+                            type: "String",
+                            required: true,
+                            attributes: {
+                                options: fields
+                                    .filter((f) => f.type.name === "Key")
+                                    .map((f) => f.name)
+                                    .join(),
+                            },
+                        },
+                        {   
+                            name: "nodes_view",
+                            label: "Nodes table Expand View",
+                            sublabel: "Click on node to show",
+                            type: "String",
+                            required: false,
+                        },
                     ],
                 });
             },
-        }, ],
+        }, 
+      ],
     });
 
 const get_state_fields = async(table_id, viewname, { show_view }) => {
@@ -105,9 +182,16 @@ const get_state_fields = async(table_id, viewname, { show_view }) => {
 const run = async(
     table_id,
     viewname, {
-	title,
-        graph_mode,
-	link_name,
+	graph_orientation,
+	links_view,
+	links_name_field,
+	links_style,
+	nodes_table,
+	nodes_name_field,
+	nodes_style,
+	nodes_view,
+	src_node_field,
+	dst_node_field,
     },
     state,
     extraArgs
@@ -117,49 +201,60 @@ const run = async(
     readState(state, fields);
     const qstate = await stateFieldsToWhere({ fields, state });
     const rows = await table.getRows(qstate);
-    //return {}; //{ name , start, end, progress: row[progress_field], custom_class };
-    let mermaid_str=`\n
----
-${title}
----
-${graph_mode}
-\n`;
-    const srcapp = 'srcapp';
-    const dstapp = 'destapp';
-    // defines Tasks List 
-/*
-    const tmp = rows.map((row) => {
-	mermaid_str += row[srcapp]+'---'+row[dstapp]+'\n';
-    });
-*/
-/*
- graph LR
+    
+    let mermaid_str=`\nflowchart ${graph_orientation}\n`;
+
+/* example
+ flowchart LR
       A[Client] --- B[Load Balancer]
       B-->C[Server01]
       B-->D(Server02)
 
 */
 
-   const dbrows = await db.query(`select 
-s.name as "src", d.name as "dst", l.name as "link",
-l.srcapp as "sid", l.destapp as "did"
-from applinks l, apps s, apps d
-where l.srcapp = s.id 
-and l.destapp = d.id`);
+   const dbrows = await db.query(
 
-/*    const dbtmp = dbrows.map((row) => {
-	mermaid_str += row['src']+'---'+row['dst']+'\n';
-    });
-*/
-//   console.log(dbrows);
+`select 
+	s.${nodes_name_field} as "src", 
+	d.${nodes_name_field} as "dst", 
+	l.${links_name_field} as "link",
+	l.${src_node_field} as "sid", 
+	l.${dst_node_field} as "did"
+from 
+	applinks l, ${nodes_table} s, ${nodes_table} d
+where 
+	l.${src_node_field} = s.id 
+and 
+	l.${dst_node_field} = d.id`
+
+);
+
    dbrows.rows.forEach(function(row) { 	
-	mermaid_str += 'a'+row['sid']+'['+row['src']+']---'+
-	'|'+row['link']+'|'+
+	mermaid_str += 'a'+row['sid']+'['+row['src']+']'+
+	links_style+'|'+row['link']+'|'+ 
 	'a'+row['did']+'['+row['dst']+']\n'; 
    });
 
+   if (nodes_view){
 
-    return div(
+	const dbrows1 = await db.query(
+
+`select 
+	a.id as "id", 
+	a.${nodes_name_field} as "name"
+from ${nodes_table} a`
+
+	);
+	// prepare nodes list
+        // click a1 "/view/NodeShow?id=1" "Node1"
+	dbrows1.rows.forEach(function(row) { 	
+
+		mermaid_str += 
+		'click '+'a'+row['id']+' "/view/'+nodes_view+'?id='+row['id']+'" "'+row['name']+'"'+'\n';
+
+	}); 
+   }
+   return div(
         div(    {
       id: "mermaid_id",
       class: "mermaid",
