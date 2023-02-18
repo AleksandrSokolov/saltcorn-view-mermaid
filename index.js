@@ -212,6 +212,7 @@ const run = async(
 
 */
 
+   const schema = db.getTenantSchemaPrefix();
    const dbrows = await db.query(
 
 `select 
@@ -221,7 +222,7 @@ const run = async(
 	l.${src_node_field} as "sid", 
 	l.${dst_node_field} as "did"
 from 
-	applinks l, ${nodes_table} s, ${nodes_table} d
+	${schema}"${sqlsanitize(table.name)}" l, ${schema}"${sqlsanitize(nodes_table)}" s, ${schema}"${sqlsanitize(nodes_table)}" d
 where 
 	l.${src_node_field} = s.id 
 and 
