@@ -4,6 +4,7 @@ const Form = require("@saltcorn/data/models/form");
 const View = require("@saltcorn/data/models/view");
 const Workflow = require("@saltcorn/data/models/workflow");
 const { stateFieldsToWhere } = require("@saltcorn/data/plugin-helper");
+const { sqlsanitize } = require("@saltcorn/db-common/internal");
 
 const db = require("@saltcorn/data/db");
 
@@ -255,7 +256,7 @@ and
 `select 
 	a.id as "id", 
 	a.${nodes_name_field} as "name"
-from ${nodes_table} a`
+from ${schema}"${sqlsanitize(nodes_table)}" a`
 
 	);
 	// prepare nodes list
