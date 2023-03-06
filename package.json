@@ -4,7 +4,7 @@
   "description": "Mermaid view plugin",
   "main": "index.js",
   "dependencies": {
-    "@saltcorn/markup": "^0.4.5",
+    "@saltcorn/markup": "^0.8.2",
     "@saltcorn/data": "^0.4.0"
   },
   "author": "Aleksandr Sokolov",
