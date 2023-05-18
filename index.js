@@ -237,8 +237,8 @@ const run = async(
 	links_style+'|'+(row[links_name_field]||'')+'|'+ 
 	'a'+row['did']+nsi[0]+row['dst']+nsi[1]+'\n';
 	if(nodes_view) {
-	   rows1.add({id:row.sid, name: row.src});
-	   rows1.add({id:row.did, name: row.dst});
+	   nodes.add({id:row.sid, name: row.src});
+	   nodes.add({id:row.did, name: row.dst});
 	}
    });
 
