@@ -4,7 +4,6 @@ const Form = require("@saltcorn/data/models/form");
 const View = require("@saltcorn/data/models/view");
 const Workflow = require("@saltcorn/data/models/workflow");
 const { stateFieldsToWhere } = require("@saltcorn/data/plugin-helper");
-const { sqlsanitize } = require("@saltcorn/db-common/internal");
 
 const db = require("@saltcorn/data/db");
 
@@ -36,7 +35,7 @@ const configuration_workflow = () =>
             name: "views",
             form: async(context) => {
                 const table = await Table.findOne({ id: context.table_id });
-                console.log("table_id", context.table_id);
+                //console.log("table_id", context.table_id);
                 const fields = await table.getFields();
 
                 const expand_views = await View.find_table_views_where(
@@ -200,8 +199,15 @@ const run = async(
     const table = await Table.findOne({ id: table_id });
     const fields = await table.getFields();
     readState(state, fields);
-    const qstate = await stateFieldsToWhere({ fields, state });
-    const rows = await table.getRows(qstate);
+    const where = await stateFieldsToWhere({ fields, state });
+    const joinFields = {
+        sid: {ref:src_node_field, target:'id'},
+        src: {ref:src_node_field, target:nodes_name_field},
+        did: {ref:dst_node_field, target:'id'},
+        dst: {ref:dst_node_field, target:nodes_name_field}
+      };
+    const rows = await table.getJoinedRows({joinFields, where});
+    let nodes = new Set();
     
     let mermaid_str=`\nflowchart ${graph_orientation}\n`;
 
@@ -213,23 +219,6 @@ const run = async(
 
 */
 
-   const schema = db.getTenantSchemaPrefix();
-   const dbrows = await db.query(
-
-`select 
-	s.${nodes_name_field} as "src", 
-	d.${nodes_name_field} as "dst", 
-	l.${links_name_field} as "link",
-	l.${src_node_field} as "sid", 
-	l.${dst_node_field} as "did"
-from 
-	${schema}"${sqlsanitize(table.name)}" l, ${schema}"${sqlsanitize(nodes_table)}" s, ${schema}"${sqlsanitize(nodes_table)}" d
-where 
-	l.${src_node_field} = s.id 
-and 
-	l.${dst_node_field} = d.id`
-
-);
    // [],(),[()],[[]],([]),(()),>],{}
    const nodes_style_items = new Map([
      ["[]"  ,["[" , "]" ]],
@@ -243,29 +232,20 @@ and
    ]);
    const nsi = nodes_style_items.get(nodes_style);
 
-   dbrows.rows.forEach(function(row) { 	
+   rows.forEach(function(row, i) {
 	mermaid_str += 'a'+row['sid']+nsi[0]+row['src']+nsi[1]+
-	links_style+'|'+row['link']+'|'+ 
-	'a'+row['did']+nsi[0]+row['dst']+nsi[1]+'\n'; 
+	links_style+'|'+(row[links_name_field]||'')+'|'+ 
+	'a'+row['did']+nsi[0]+row['dst']+nsi[1]+'\n';
+	if(nodes_view) {
+	   rows1.add({id:row.sid, name: row.src});
+	   rows1.add({id:row.did, name: row.dst});
+	}
    });
 
-   if (nodes_view){
-
-	const dbrows1 = await db.query(
-
-`select 
-	a.id as "id", 
-	a.${nodes_name_field} as "name"
-from ${schema}"${sqlsanitize(nodes_table)}" a`
-
-	);
-	// prepare nodes list
-        // click a1 "/view/NodeShow?id=1" "Node1"
-	dbrows1.rows.forEach(function(row) { 	
-
-		mermaid_str += 
-		'click '+'a'+row['id']+' "/view/'+nodes_view+'?id='+row['id']+'" "'+row['name']+'"'+'\n';
-
+   if(nodes_view) {
+	Array.from(nodes).forEach(function(row) {
+	   mermaid_str += 
+	   'click '+'a'+row['id']+' "/view/'+nodes_view+'?id='+row['id']+'" "'+row['name']+'"'+'\n';
 	}); 
    }
    return div(
