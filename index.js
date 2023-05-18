@@ -1,3 +1,4 @@
+"use strict";
 const Field = require("@saltcorn/data/models/field");
 const Table = require("@saltcorn/data/models/table");
 const Form = require("@saltcorn/data/models/form");
@@ -19,8 +20,10 @@ const {
     i,
 } = require("@saltcorn/markup/tags");
 const readState = (state, fields) => {
+    "use strict";
     fields.forEach((f) => {
-        const current = state[f.name];
+	"use strict";
+	const current = state[f.name];
         if (typeof current !== "undefined") {
             if (f.type.read) state[f.name] = f.type.read(current);
             else if (f.type === "Key")
@@ -52,6 +55,9 @@ const configuration_workflow = () =>
                     state_fields.every((sf) => !sf.required)
                 );
                 const create_view_opts = create_views.map((v) => v.name);
+                const node_table_opts = Array.from(new Set(fields
+                                    .filter((f) => f.type.name === "Key")
+                                    .map((f) => f.reftable_name)));
 
                 // create new view
 
@@ -106,6 +112,9 @@ const configuration_workflow = () =>
                             sublabel: "Choose table - list of nodes",
                             type: "String",
                             required: true,
+                            attributes: {
+                                options: node_table_opts.join(),
+                            },
                         },
                         {   
                             name: "nodes_style",
@@ -181,7 +190,13 @@ const get_state_fields = async(table_id, viewname, { show_view }) => {
 };
 const run = async(
     table_id,
-    viewname, {
+    viewname, 
+    configuration,
+    state,
+    extraArgs
+) => {
+    "use strict";
+    const {
 	graph_orientation,
 	links_view,
 	links_name_field,
@@ -192,10 +207,7 @@ const run = async(
 	nodes_view,
 	src_node_field,
 	dst_node_field,
-    },
-    state,
-    extraArgs
-) => {
+    } = configuration;
     const table = await Table.findOne({ id: table_id });
     const fields = await table.getFields();
     readState(state, fields);
@@ -207,8 +219,7 @@ const run = async(
         dst: {ref:dst_node_field, target:nodes_name_field}
       };
     const rows = await table.getJoinedRows({joinFields, where});
-    let nodes = new Set();
-    
+    let nodes = new Set();    
     let mermaid_str=`\nflowchart ${graph_orientation}\n`;
 
 /* example
@@ -233,6 +244,7 @@ const run = async(
    const nsi = nodes_style_items.get(nodes_style);
 
    rows.forEach(function(row, i) {
+	"use strict";
 	mermaid_str += 'a'+row['sid']+nsi[0]+row['src']+nsi[1]+
 	links_style+'|'+(row[links_name_field]||'')+'|'+ 
 	'a'+row['did']+nsi[0]+row['dst']+nsi[1]+'\n';
@@ -244,8 +256,9 @@ const run = async(
 
    if(nodes_view) {
 	Array.from(nodes).forEach(function(row) {
+	    "use strict";
 	   mermaid_str += 
-	   'click '+'a'+row['id']+' "/view/'+nodes_view+'?id='+row['id']+'" "'+row['name']+'"'+'\n';
+		'click '+'a'+row['id']+' "/view/'+nodes_view+'?id='+row['id']+'" "'+row['name']+'"'+'\n';
 	}); 
    }
    return div(
