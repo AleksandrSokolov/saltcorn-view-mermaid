@@ -1,3 +1,4 @@
+"use strict";
 const Field = require("@saltcorn/data/models/field");
 const Table = require("@saltcorn/data/models/table");
 const Form = require("@saltcorn/data/models/form");
@@ -19,8 +20,10 @@ const {
     i,
 } = require("@saltcorn/markup/tags");
 const readState = (state, fields) => {
+    "use strict";
     fields.forEach((f) => {
-        const current = state[f.name];
+	"use strict";
+	const current = state[f.name];
         if (typeof current !== "undefined") {
             if (f.type.read) state[f.name] = f.type.read(current);
             else if (f.type === "Key")
@@ -52,6 +55,26 @@ const configuration_workflow = () =>
                     state_fields.every((sf) => !sf.required)
                 );
                 const create_view_opts = create_views.map((v) => v.name);
+		//console.log('fields1:', fields);
+		//console.log('fields.type:', fields.map((f) => f.type));
+		//console.log('fields keys:', fields.map((f) => f.type === "Key"));
+		//console.log('fields.reftable_name:', fields.map((f) => f.reftable_name));
+                let node_table_opts = Array.from(new Set(fields
+					.filter((f) => f.type === "Key")
+					.map((f) => f.reftable_name)
+					));
+		//console.log('node_table_opts1:', node_table_opts);
+		//console.log('node_table_opts2:', node_table_opts.map((tname) => fields.filter((f)=>f.reftable_name==tname)));
+		node_table_opts = node_table_opts.filter((tname) => (2 <= fields.filter((f)=>f.reftable_name==tname).length));
+		//console.log('node_table_opts3:', node_table_opts);
+                const node_tables = node_table_opts.map((tname) => Table.findOne({ name:  tname}));
+                const node_view_opts = (await Promise.all(node_tables.map((t) => View.find_table_views_where(t.id,
+				({ state_fields, viewtemplate, viewrow }) => viewrow.name !== context.viewname)))
+				).flat().map((v) => v.name);
+		//console.log('node_view_opts:', node_view_opts);
+                const node_fields = Object.fromEntries(node_tables
+					.map((t) => [t.name, t.getFields().filter((f)=>f.type.name=="String").map((f)=>f.name)]))
+		const nodes_name_field_opts = Array.from(new Set(Object.values(node_fields).flat()));
 
                 // create new view
 
@@ -106,6 +129,9 @@ const configuration_workflow = () =>
                             sublabel: "Choose table - list of nodes",
                             type: "String",
                             required: true,
+                            attributes: {
+                                options: node_table_opts.join(),
+                            },
                         },
                         {   
                             name: "nodes_style",
@@ -123,13 +149,9 @@ const configuration_workflow = () =>
                             sublabel: "Field in Nodes table with type 'String'",
                             type: "String",
                             required: true,
-/*                            attributes: {
-                                options: fields
-                                    .filter((f) => f.type.name === "String")
-                                    .map((f) => f.name)
-                                    .join(),
+                            attributes: {
+                                options: nodes_name_field_opts.join(),
                             },
-*/
                         },
                         {   
                             name: "src_node_field",
@@ -139,7 +161,7 @@ const configuration_workflow = () =>
                             required: true,
                             attributes: {
                                 options: fields
-                                    .filter((f) => f.type.name === "Key")
+                                    .filter((f) => f.type === "Key")
                                     .map((f) => f.name)
                                     .join(),
                             },
@@ -152,7 +174,7 @@ const configuration_workflow = () =>
                             required: true,
                             attributes: {
                                 options: fields
-                                    .filter((f) => f.type.name === "Key")
+                                    .filter((f) => f.type === "Key")
                                     .map((f) => f.name)
                                     .join(),
                             },
@@ -163,6 +185,9 @@ const configuration_workflow = () =>
                             sublabel: "Click on node to show",
                             type: "String",
                             required: false,
+                            attributes: {
+                                options: node_view_opts.join(),
+                            }
                         },
                     ],
                 });
@@ -181,7 +206,13 @@ const get_state_fields = async(table_id, viewname, { show_view }) => {
 };
 const run = async(
     table_id,
-    viewname, {
+    viewname, 
+    configuration,
+    state,
+    extraArgs
+) => {
+    "use strict";
+    const {
 	graph_orientation,
 	links_view,
 	links_name_field,
@@ -192,10 +223,7 @@ const run = async(
 	nodes_view,
 	src_node_field,
 	dst_node_field,
-    },
-    state,
-    extraArgs
-) => {
+    } = configuration;
     const table = await Table.findOne({ id: table_id });
     const fields = await table.getFields();
     readState(state, fields);
@@ -207,8 +235,7 @@ const run = async(
         dst: {ref:dst_node_field, target:nodes_name_field}
       };
     const rows = await table.getJoinedRows({joinFields, where});
-    let nodes = new Set();
-    
+    let nodes = new Set();    
     let mermaid_str=`\nflowchart ${graph_orientation}\n`;
 
 /* example
@@ -233,8 +260,9 @@ const run = async(
    const nsi = nodes_style_items.get(nodes_style);
 
    rows.forEach(function(row, i) {
+	"use strict";
 	mermaid_str += 'a'+row['sid']+nsi[0]+row['src']+nsi[1]+
-	links_style+'|'+(row[links_name_field]||'')+'|'+ 
+	links_style+(row[links_name_field]?'|'+row[links_name_field]+'|':'')+
 	'a'+row['did']+nsi[0]+row['dst']+nsi[1]+'\n';
 	if(nodes_view) {
 	   nodes.add({id:row.sid, name: row.src});
@@ -244,12 +272,16 @@ const run = async(
 
    if(nodes_view) {
 	Array.from(nodes).forEach(function(row) {
+	    "use strict";
 	   mermaid_str += 
-	   'click '+'a'+row['id']+' "/view/'+nodes_view+'?id='+row['id']+'" "'+row['name']+'"'+'\n';
-	}); 
+		'click '+'a'+row['id']+' "/view/'+nodes_view+'?id='+row['id']+'" "'+row['name']+'"'+'\n';
+	});
+   }
+   if(mermaid_str == `\nflowchart ${graph_orientation}\n`) {
+       return div(`No rows found in ${table.name}.`);
    }
    return div(
-        div(    {
+        div({
       id: "mermaid_id",
       class: "mermaid",
     },
