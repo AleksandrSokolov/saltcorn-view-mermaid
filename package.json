@@ -1,6 +1,6 @@
 {
-  "name": "@saltcorn/saltcorn-mermaid",
-  "version": "0.1.1",
+  "name": "saltcorn-mermaid",
+  "version": "0.1.2",
   "description": "Mermaid view plugin",
   "main": "index.js",
   "scripts": {

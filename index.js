@@ -179,7 +179,7 @@ const configuration_workflow = () =>
                                     .join(),
                             },
                         },
-                        {   
+                        {
                             name: "nodes_view",
                             label: "Nodes table Expand View",
                             sublabel: "Click on node to show",
@@ -188,6 +188,18 @@ const configuration_workflow = () =>
                             attributes: {
                                 options: node_view_opts.join(),
                             }
+                        },
+                        {
+                            name: "mermaid_style",
+                            label: "Advanced style=\"\" for mermaid tag",
+                            type: "String",
+                            required: false,
+                        },
+                        {
+                            name: "parent_style",
+                            label: "Advanced style=\"\" for container tag",
+                            type: "String",
+                            required: false,
                         },
                     ],
                 });
@@ -223,6 +235,8 @@ const run = async(
 	nodes_view,
 	src_node_field,
 	dst_node_field,
+	parent_style,
+	mermaid_style,
     } = configuration;
     const table = await Table.findOne({ id: table_id });
     const fields = await table.getFields();
@@ -280,19 +294,23 @@ const run = async(
    if(mermaid_str == `\nflowchart ${graph_orientation}\n`) {
        return div(`No rows found in ${table.name}.`);
    }
-   return div(
+   return div({style: parent_style || false},
         div({
       id: "mermaid_id",
       class: "mermaid",
+      style: mermaid_style || false,
     },
 	`${mermaid_str}`
         )
     );
 };
+const base_headers = `/plugins/public/saltcorn-mermaid@${
+  require("./package.json").version
+}`;
 // https://cdnjs.com/libraries/mermaid
 const headers = [{
-        script: "https://cdnjs.cloudflare.com/ajax/libs/mermaid/9.3.0/mermaid.min.js",
-        integrity: "sha512-ku2nmBrzAXY5YwohzTqLYH1/lvyMrpTVxgQKrvTabd/b/uesqltLORdmpVapYv6QhZVCLUX6wkvFaKOAY4xpUA==",
+        script: `${base_headers}/mermaid.min.js`, // 10.2.0
+        integrity: "sha512-dXrRCacKAgxLUx/PjTiWYTzshYHJZEqa8VVIBruyJAPa2t2bzzkCfRSclVWBN2pls6w+wTsfbWKpbKd3KBwUaA==",
     },
 ];
 
