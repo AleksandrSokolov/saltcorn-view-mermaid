@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+const assert = require('node:assert');
+const fetch = require('node-fetch');
+const path = require('node:path');
+const fs = require('node:fs');
+const util = require('node:util');
+const crypto = require('node:crypto');
+const diff = require('diff');
+
+const pkg_dir = path.dirname(module.path);
+const pkg_info = require('../package.json');
+const script_re = /^([^\n]*@mermaid-script@[^\n]*)\n(.*)\n([^\n]*@\/mermaid-script@)/ms;
+const main_info = Symbol('main_info');
+
+async function latest_minjs(version) {
+  const lib_info = await (await fetch('https://api.cdnjs.com/libraries/mermaid')).json();
+  if(version && version != lib_info.version) {
+    assert(lib_info.versions.includes(version), `Can't find version ${version} in library info.`);
+    const version_info = await (await fetch(`https://api.cdnjs.com/libraries/mermaid/${version}`)).json();
+    assert.equal(version, version_info.version, `Can't download correct info of library version ${version}.`);
+    assert(lib_info.filename in version_info.sri, `Can't find file ${lib_info.filename} in library version ${version}.`);
+    return {
+          script: lib_info.latest.replace(`/${lib_info.version}/`, `/${version}/`),
+          integrity: version_info.sri[lib_info.filename],
+          version: version_info.version,
+          filename: lib_info.filename,
+      };
+  }
+  return {
+        script: lib_info.latest,
+        integrity: lib_info.sri,
+        version: lib_info.version,
+        filename: lib_info.filename,
+    };
+}
+
+async function read_script() {
+  const main_script = path.join(pkg_dir, pkg_info.main || 'index.js');
+  const script_data = await fs.promises.readFile(main_script, {encoding: 'utf-8'});
+  const match = script_re.exec(script_data);
+  try {
+    assert(match, "Can't find mermaid-script clause in main script.");
+    const data_f = new Function('base_headers', `{return ({${match[2]}});}`);
+    const data = data_f('./public');
+    const minjs_data = await fs.promises.readFile(data.script);
+    const hasher = crypto.createHash('sha512');
+    hasher.update(minjs_data);
+    const integrity = 'sha512-'+hasher.digest().toString('base64')
+    data.checked = integrity == data.integrity;
+    data[main_info] = {main_script, match};
+    return data;
+  } catch(error) {
+    return {error,checked:false,error};
+  }
+}
+
+async function write_lib(data, latest, check) {
+  const resp = await fetch(latest.script);
+  const lib_content = Buffer.from(await (await resp.blob()).arrayBuffer());
+  const hash = 'sha512-'+crypto.createHash('sha512').update(lib_content).digest().toString('base64');
+  assert.equal(latest.integrity, hash, "Library content downloaded doesn't passes integrity check.");
+  if(check) {
+    console.log(`Update ${data.script} to ${latest.version}.`);
+    return;
+  }
+  await fs.promises.rename(data.script,data.script+'.bak');
+  await fs.promises.writeFile(path.join('./public', latest.filename), lib_content);
+}
+
+async function write_script(data, latest, check) {
+  const insert = `    {	// @mermaid-script@ ${latest.version}
+        script: \`\${base_headers}/${latest.filename}\`,
+        integrity: "${latest.integrity}",
+    },	// @/mermaid-script@`;
+  const match = data[main_info].match;
+  const script_content = `${match.input.substring(0,match.index)}${insert}${match.input.substring(match.index+match[0].length)}`;
+  if(check) {
+    console.log(diff.createPatch(path.relative(pkg_dir, data[main_info].main_script), match.input, script_content));
+    return;
+  }
+  await fs.promises.rename(data[main_info].main_script, data[main_info].main_script+'.bak');
+  await fs.promises.writeFile(data[main_info].main_script, script_content, {encoding: 'utf-8'});
+}
+
+async function amain({check, verbose, force, version}) {
+  const data = await read_script();
+  if(!data.checked) {
+    console.error("Current content of script is invalid.", data.error?String(data.error):(force?"Will override.":"You can pass --force to override this check."));
+    if(data.error || !force)
+      return;
+  }
+  if(verbose)
+    console.log('read_script =', JSON.stringify(data, null, 2));
+  const latest = await latest_minjs(version);
+  if(verbose)
+    console.log('latest_minjs =', JSON.stringify(latest, null, 2));
+  await write_lib(data, latest, check);
+  await write_script(data, latest, check);
+}
+
+function main() {
+  const opts = util.parseArgs({options:{help:{type:'boolean',short:'h'},check:{type:'boolean',short:'c'},verbose:{type:'boolean',short:'v'},version:{type:'string',short:'V'},force:{type:'boolean',short:'f'}}}).values;
+  if(opts.help) {
+    console.log('Usage: npm run update [--force|-f] [--verbose|-v] [--version=STR|-V STR]');
+    return;
+  }
+  amain(opts).then(()=>null);
+}
+
+main();
