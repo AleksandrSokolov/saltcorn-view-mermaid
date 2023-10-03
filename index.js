@@ -19,6 +19,20 @@ const {
     domReady,
     i,
 } = require("@saltcorn/markup/tags");
+const shared_attrs = [
+        {
+            name: "mermaid_style",
+            label: "Advanced style=\"\" for mermaid tag",
+            type: "String",
+            required: false,
+        },
+        {
+            name: "parent_style",
+            label: "Advanced style=\"\" for container tag",
+            type: "String",
+            required: false,
+        },
+    ];
 const readState = (state, fields) => {
     "use strict";
     fields.forEach((f) => {
@@ -38,7 +52,6 @@ const configuration_workflow = () =>
             name: "views",
             form: async(context) => {
                 const table = await Table.findOne({ id: context.table_id });
-                //console.log("table_id", context.table_id);
                 const fields = await table.getFields();
 
                 const expand_views = await View.find_table_views_where(
@@ -55,26 +68,26 @@ const configuration_workflow = () =>
                     state_fields.every((sf) => !sf.required)
                 );
                 const create_view_opts = create_views.map((v) => v.name);
-		//console.log('fields1:', fields);
-		//console.log('fields.type:', fields.map((f) => f.type));
-		//console.log('fields keys:', fields.map((f) => f.type === "Key"));
-		//console.log('fields.reftable_name:', fields.map((f) => f.reftable_name));
                 let node_table_opts = Array.from(new Set(fields
 					.filter((f) => f.type === "Key")
 					.map((f) => f.reftable_name)
 					));
-		//console.log('node_table_opts1:', node_table_opts);
-		//console.log('node_table_opts2:', node_table_opts.map((tname) => fields.filter((f)=>f.reftable_name==tname)));
 		node_table_opts = node_table_opts.filter((tname) => (2 <= fields.filter((f)=>f.reftable_name==tname).length));
-		//console.log('node_table_opts3:', node_table_opts);
                 const node_tables = node_table_opts.map((tname) => Table.findOne({ name:  tname}));
-                const node_view_opts = (await Promise.all(node_tables.map((t) => View.find_table_views_where(t.id,
-				({ state_fields, viewtemplate, viewrow }) => viewrow.name !== context.viewname)))
-				).flat().map((v) => v.name);
-		//console.log('node_view_opts:', node_view_opts);
+                const node_view_opts = Object.fromEntries((await Promise.all(node_tables.map(async(t) => [t.name,await View.find_table_views_where(t.id,
+				({ state_fields, viewtemplate, viewrow }) => viewrow.name !== context.viewname)]))
+				).map(([tname,views]) => [tname,views.map(v=>v.name)]));
                 const node_fields = Object.fromEntries(node_tables
 					.map((t) => [t.name, t.getFields().filter((f)=>f.type.name=="String").map((f)=>f.name)]))
-		const nodes_name_field_opts = Array.from(new Set(Object.values(node_fields).flat()));
+		let src_node_field_opts = {}, tgt_node_field_opts = {};
+		const key_fields = fields.filter((f) => f.type === "Key");
+		for(const tname of node_table_opts) {
+		  const tbl_key_fieldnames = key_fields.filter(f=>f.reftable_name===tname).map(f=>f.name);
+		  src_node_field_opts[tname] = tbl_key_fieldnames;
+		  for(const fname of tbl_key_fieldnames)
+		    tgt_node_field_opts[fname] = tbl_key_fieldnames.filter(f=>f!==fname);
+		}
+		const has_node_view = Object.entries(node_view_opts).filter(([k,v])=>v.length>0).map(([k,v])=>k);
 
                 // create new view
 
@@ -105,7 +118,7 @@ const configuration_workflow = () =>
                             label: "Link name field",
                             sublabel: "Field type need to be 'String'",
                             type: "String",
-                            required: true,
+                            required: false,
                             attributes: {
                                 options: fields
                                     .filter((f) => f.type.name === "String")
@@ -113,7 +126,7 @@ const configuration_workflow = () =>
                                     .join(),
                             },
                         },
-                        {
+                        ...expand_view_opts.length==0?[]:[{
                             name: "links_view",
                             label: "Links table Expand View",
                             //sublabel: "Click on node to show",
@@ -122,7 +135,7 @@ const configuration_workflow = () =>
                             attributes: {
                                 options: expand_view_opts.join(),
                             },
-                        },
+                        }],
                         {   
                             name: "nodes_table",
                             label: "Nodes table name",
@@ -150,7 +163,7 @@ const configuration_workflow = () =>
                             type: "String",
                             required: true,
                             attributes: {
-                                options: nodes_name_field_opts.join(),
+                                calcOptions: ['nodes_table', node_fields],
                             },
                         },
                         {   
@@ -160,10 +173,8 @@ const configuration_workflow = () =>
                             type: "String",
                             required: true,
                             attributes: {
-                                options: fields
-                                    .filter((f) => f.type === "Key")
-                                    .map((f) => f.name)
-                                    .join(),
+                                calcOptions: ['nodes_table', src_node_field_opts],
+                                //options: src_node_field_opts
                             },
                         },
                         {   
@@ -173,10 +184,7 @@ const configuration_workflow = () =>
                             type: "String",
                             required: true,
                             attributes: {
-                                options: fields
-                                    .filter((f) => f.type === "Key")
-                                    .map((f) => f.name)
-                                    .join(),
+                                calcOptions: ['src_node_field', tgt_node_field_opts],
                             },
                         },
                         {
@@ -185,22 +193,12 @@ const configuration_workflow = () =>
                             sublabel: "Click on node to show",
                             type: "String",
                             required: false,
+                            showIf: { nodes_table: has_node_view },
                             attributes: {
-                                options: node_view_opts.join(),
+                                calcOptions: ['nodes_table', node_view_opts],
                             }
                         },
-                        {
-                            name: "mermaid_style",
-                            label: "Advanced style=\"\" for mermaid tag",
-                            type: "String",
-                            required: false,
-                        },
-                        {
-                            name: "parent_style",
-                            label: "Advanced style=\"\" for container tag",
-                            type: "String",
-                            required: false,
-                        },
+                        ...shared_attrs
                     ],
                 });
             },
@@ -304,19 +302,42 @@ const run = async(
         )
     );
 };
+function mermaid_fieldview_run(v, req, attrs) {
+    "use strict";
+    const {
+	parent_style,
+	mermaid_style,
+    } = attrs;
+   return div({style: parent_style || false},
+        div({
+      //id: "mermaid_id",
+      class: "mermaid",
+      style: mermaid_style || false,
+    },
+	String(v)
+        )
+    );
+}
 const base_headers = `/plugins/public/saltcorn-mermaid@${
   require("./package.json").version
 }`;
 // https://cdnjs.com/libraries/mermaid
-const headers = [{
-        script: `${base_headers}/mermaid.min.js`, // 10.2.0
+const headers = [
+    {	// @mermaid-script@ 10.2.0
+        script: `${base_headers}/mermaid.min.js`,
         integrity: "sha512-dXrRCacKAgxLUx/PjTiWYTzshYHJZEqa8VVIBruyJAPa2t2bzzkCfRSclVWBN2pls6w+wTsfbWKpbKd3KBwUaA==",
-    },
+    },	// @/mermaid-script@
 ];
 
 module.exports = {
     sc_plugin_api_version: 1,
     headers,
+    fieldviews: {mermaid:{
+        type: "String",
+        isEdit: false,
+        configFields: shared_attrs,
+        run: mermaid_fieldview_run
+    }},
     viewtemplates: [{
         name: "Mermaid",
         display_state_form: false,
