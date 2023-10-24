@@ -323,9 +323,9 @@ const base_headers = `/plugins/public/saltcorn-mermaid@${
 }`;
 // https://cdnjs.com/libraries/mermaid
 const headers = [
-    {	// @mermaid-script@ 10.2.0
+    {	// @mermaid-script@ 10.5.1
         script: `${base_headers}/mermaid.min.js`,
-        integrity: "sha512-dXrRCacKAgxLUx/PjTiWYTzshYHJZEqa8VVIBruyJAPa2t2bzzkCfRSclVWBN2pls6w+wTsfbWKpbKd3KBwUaA==",
+        integrity: "sha512-gAfYc+bjXAmXUHDG1Dm8AiUWDz8PhByz2852OW/ZitnuM4gGZPD8oQhz57KR2WcDcoCvZInSH1HqbZwMpjHdeg==",
     },	// @/mermaid-script@
 ];
 
