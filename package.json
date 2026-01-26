@@ -14,7 +14,7 @@
     "check"
   ],
   "dependencies": {
-    "@saltcorn/data": "^0.4.5",
+    "@saltcorn/data": "^0.6.4",
     "@saltcorn/markup": "^0.8.9"
   },
   "author": "Aleksandr Sokolov",
